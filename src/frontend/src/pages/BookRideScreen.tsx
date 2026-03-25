@@ -30,10 +30,35 @@ import { MapView } from "../components/MapView";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { FareStatus, Status, useCreateRideRequest } from "../hooks/useQueries";
 
+function haversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function estimateFareFromCoords(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const km = haversineKm(lat1, lon1, lat2, lon2);
+  return Math.max(50, Math.round(50 + km * 8));
+}
+
 function estimateFare(pickup: string, dropoff: string): number {
-  // Approximate distance proxy using string length variation (no real coords yet)
   const distanceUnits = ((pickup.length + dropoff.length) % 20) + 3;
-  // Base is the economy min (50), add 5 per unit
   return 50 + distanceUnits * 5;
 }
 
@@ -148,6 +173,11 @@ export default function BookRideScreen() {
 
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+  const [dropoffSuggestions, setDropoffSuggestions] = useState<
+    Array<{ display_name: string; lat: string; lon: string }>
+  >([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedRide, setSelectedRide] = useState<RideType>("economy");
   const [autoAccept, setAutoAccept] = useState(false);
   const [pickupCoords, setPickupCoords] = useState<
@@ -174,7 +204,7 @@ export default function BookRideScreen() {
   >(new Map());
   const mapIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Restore saved pickup/dropoff from sessionStorage on mount
+  // Restore saved pickup/dropoff from sessionStorage on mount + GPS auto-detect
   useEffect(() => {
     const savedPickup = sessionStorage.getItem("rideshare_saved_pickup");
     const savedDropoff = sessionStorage.getItem("rideshare_saved_dropoff");
@@ -186,12 +216,91 @@ export default function BookRideScreen() {
       setDropoff(savedDropoff);
       sessionStorage.removeItem("rideshare_saved_dropoff");
     }
+    // Auto-detect GPS location for pickup if no saved pickup
+    if (!savedPickup) {
+      navigator.geolocation?.getCurrentPosition(
+        async (pos) => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          setPickupCoords([lat, lng]);
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ar`,
+              { headers: { "User-Agent": "FastTrans/1.0" } },
+            );
+            const data = await res.json();
+            setPickup(
+              data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+            );
+          } catch {
+            setPickup(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          }
+        },
+        () => {},
+        { timeout: 8000, enableHighAccuracy: true },
+      );
+    }
   }, []);
 
+  const searchDestination = (query: string) => {
+    setDropoff(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!query.trim() || query.length < 2) {
+      setDropoffSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=eg&accept-language=ar&limit=5`,
+          { headers: { "User-Agent": "FastTrans/1.0" } },
+        );
+        const data = await res.json();
+        setDropoffSuggestions(data);
+        setShowSuggestions(data.length > 0);
+      } catch {
+        setDropoffSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 500);
+  };
+
+  const selectSuggestion = (s: {
+    display_name: string;
+    lat: string;
+    lon: string;
+  }) => {
+    setDropoff(s.display_name);
+    setDropoffCoords([Number.parseFloat(s.lat), Number.parseFloat(s.lon)]);
+    setDropoffSuggestions([]);
+    setShowSuggestions(false);
+  };
+
   const fareBase =
-    pickup.trim() && dropoff.trim()
-      ? estimateFare(pickup.trim(), dropoff.trim())
-      : 150;
+    pickupCoords && dropoffCoords
+      ? estimateFareFromCoords(
+          pickupCoords[0],
+          pickupCoords[1],
+          dropoffCoords[0],
+          dropoffCoords[1],
+        )
+      : pickup.trim() && dropoff.trim()
+        ? estimateFare(pickup.trim(), dropoff.trim())
+        : 150;
+
+  const etaMinutes =
+    pickupCoords && dropoffCoords
+      ? Math.round(
+          (haversineKm(
+            pickupCoords[0],
+            pickupCoords[1],
+            dropoffCoords[0],
+            dropoffCoords[1],
+          ) /
+            30) *
+            60,
+        )
+      : 15;
 
   const getRidePrice = (multiplier: number, minPrice: number) =>
     Math.max(minPrice, Math.round(fareBase * multiplier));
@@ -472,36 +581,6 @@ export default function BookRideScreen() {
           <ChevronLeft className="w-5 h-5 text-foreground" />
         </button>
 
-        {/* Pickup/dropoff overlay card */}
-        <div className="absolute top-4 left-4 right-16 bg-card/95 backdrop-blur-sm rounded-2xl px-3 py-2.5 z-10 shadow-card">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-400 shrink-0" />
-            <Input
-              value={pickup}
-              onChange={(e) => setPickup(e.target.value)}
-              placeholder="موقع الانطلاق"
-              className="flex-1 bg-transparent border-0 p-0 h-auto text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-0 text-right"
-              data-ocid="book.input"
-            />
-          </div>
-          <div className="h-px bg-border mx-4" />
-          <div className="flex items-center gap-2 mt-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0" />
-            <Input
-              value={dropoff}
-              onChange={(e) => setDropoff(e.target.value)}
-              placeholder="الوجهة"
-              className="flex-1 bg-transparent border-0 p-0 h-auto text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-0 text-right"
-              data-ocid="book.input"
-            />
-            {dropoff.trim() && (
-              <span className="text-xs text-muted-foreground shrink-0">
-                ~ساعة 3 دقيقة 1
-              </span>
-            )}
-          </div>
-        </div>
-
         {/* Searching overlay on map */}
         {isSearching && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card/90 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2 z-20">
@@ -518,9 +597,60 @@ export default function BookRideScreen() {
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="flex-1 bg-card rounded-t-3xl -mt-4 relative z-10 overflow-y-auto flex flex-col"
+        className="flex-1 bg-card rounded-t-3xl relative z-10 overflow-y-auto flex flex-col"
       >
-        <div className="w-10 h-1 bg-border rounded-full mx-auto mt-3 mb-1 shrink-0" />
+        {/* Pickup/dropoff input card — always visible below map */}
+        <div className="px-4 pt-3 pb-0 shrink-0">
+          <div className="bg-secondary rounded-2xl px-3 py-2.5 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-400 shrink-0" />
+              <Input
+                value={pickup}
+                onChange={(e) => setPickup(e.target.value)}
+                placeholder="موقع الانطلاق"
+                className="flex-1 bg-transparent border-0 p-0 h-auto text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-0 text-right"
+                data-ocid="book.input"
+              />
+            </div>
+            <div className="h-px bg-border mx-4" />
+            <div className="flex items-center gap-2 mt-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0" />
+              <Input
+                value={dropoff}
+                onChange={(e) => searchDestination(e.target.value)}
+                onFocus={() =>
+                  dropoffSuggestions.length > 0 && setShowSuggestions(true)
+                }
+                placeholder="الوجهة"
+                className="flex-1 bg-transparent border-0 p-0 h-auto text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-0 text-right"
+                data-ocid="book.input"
+              />
+              {dropoff.trim() && (
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {etaMinutes < 60
+                    ? `${etaMinutes} دقيقة`
+                    : `${Math.floor(etaMinutes / 60)} س ${etaMinutes % 60} د`}
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Nominatim suggestions */}
+          {showSuggestions && dropoffSuggestions.length > 0 && (
+            <div className="bg-card border border-border rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto mt-1">
+              {dropoffSuggestions.map((s) => (
+                <button
+                  key={s.display_name}
+                  type="button"
+                  className="w-full text-right px-4 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors border-b border-border last:border-0"
+                  onMouseDown={() => selectSuggestion(s)}
+                  data-ocid="book.secondary_button"
+                >
+                  {s.display_name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Promo code row */}
         {showForm && (

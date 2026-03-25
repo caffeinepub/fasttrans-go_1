@@ -1,14 +1,16 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
-import iconUrl from "leaflet/dist/images/marker-icon.png";
-import shadowUrl from "leaflet/dist/images/marker-shadow.png";
-import { useEffect, useRef } from "react";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { Crosshair, Navigation } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
-// Fix default marker icons for Vite
+// Fix default Leaflet marker icon
 (L.Icon.Default.prototype as any)._getIconUrl = undefined;
-L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
 
 export interface Driver {
   id: number;
@@ -19,285 +21,256 @@ export interface Driver {
   distance: number;
 }
 
-const CAIRO: [number, number] = [30.0444, 31.2357];
-
-const greenIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:14px;height:14px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
-  iconAnchor: [7, 7],
-});
-
-const redIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
-  iconAnchor: [7, 7],
-});
-
-function makeDriverIcon(eta: number) {
-  return L.divIcon({
-    className: "",
-    html: `<div style="display:flex;flex-direction:column;align-items:center;">
-      <div style="width:30px;height:30px;border-radius:50%;background:#CCFF00;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(204,255,0,0.4);">🚗</div>
-      <div style="background:rgba(20,20,20,0.9);color:#CCFF00;font-size:9px;font-weight:bold;padding:2px 5px;border-radius:4px;margin-top:2px;border:1px solid rgba(204,255,0,0.3);white-space:nowrap;">${eta === 1 ? "دقيقة" : eta === 2 ? "دقيقتان" : `${eta} د`}</div>
-    </div>`,
-    iconAnchor: [15, 15],
-  });
-}
-
-interface FlyToProps {
-  center: [number, number] | null;
-}
-
-function FlyTo({ center }: FlyToProps) {
-  const map = useMap();
-  const prevCenter = useRef<[number, number] | null>(null);
-  useEffect(() => {
-    if (
-      center &&
-      (!prevCenter.current ||
-        prevCenter.current[0] !== center[0] ||
-        prevCenter.current[1] !== center[1])
-    ) {
-      map.flyTo(center, 15, { duration: 1.2 });
-      prevCenter.current = center;
-    }
-  }, [center, map]);
-  return null;
-}
-
-interface SearchingOverlayProps {
-  searching?: boolean;
-}
-
-function SearchingOverlay({ searching }: SearchingOverlayProps) {
-  if (!searching) return null;
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        pointerEvents: "none",
-        zIndex: 999,
-      }}
-    >
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            borderRadius: "50%",
-            border: "2px solid #CCFF00",
-            animation: `pulseRing 2s ease-out ${i * 0.5}s infinite`,
-            width: `${80 + i * 40}px`,
-            height: `${80 + i * 40}px`,
-            opacity: 0,
-          }}
-        />
-      ))}
-      <div
-        style={{
-          width: "14px",
-          height: "14px",
-          borderRadius: "50%",
-          background: "#CCFF00",
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          boxShadow: "0 0 12px #CCFF00",
-        }}
-      />
-    </div>
-  );
-}
-
 interface MapViewProps {
-  pickup?: string;
-  dropoff?: string;
   className?: string;
   drivers?: Driver[];
   searching?: boolean;
-  onPickupChange?: (lat: number, lng: number, label: string) => void;
-  onDropoffChange?: (lat: number, lng: number, label: string) => void;
   pickupCoords?: [number, number];
   dropoffCoords?: [number, number];
+  onPickupChange?: (lat: number, lng: number, label: string) => void;
   showGPSButton?: boolean;
+  pickup?: string;
+  dropoff?: string;
+  onDropoffChange?: (lat: number, lng: number, label: string) => void;
 }
 
-function GPSButton({
-  onLocate,
-}: {
-  onLocate: (pos: GeolocationPosition) => void;
-}) {
-  const map = useMap();
-  const handleClick = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        map.flyTo([latitude, longitude], 15, { duration: 1.2 });
-        onLocate(pos);
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 10000 },
+const CAIRO_LAT = 30.0444;
+const CAIRO_LNG = 31.2357;
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ar`,
+      { headers: { "User-Agent": "FastTrans/1.0" } },
     );
-  };
-  return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: "80px",
-        left: "10px",
-        zIndex: 1000,
-      }}
-    >
-      <button
-        type="button"
-        onClick={handleClick}
-        style={{
-          width: "36px",
-          height: "36px",
-          background: "#1C1C1C",
-          border: "2px solid #CCFF00",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
-          color: "#CCFF00",
-          fontSize: "16px",
-        }}
-        title="موقعي الحالي"
-        aria-label="تحديد موقعي الحالي"
-      >
-        ⊕
-      </button>
-    </div>
-  );
+    const data = await res.json();
+    return (
+      data.display_name ||
+      data.address?.road ||
+      `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+    );
+  } catch {
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  }
 }
 
 export function MapView({
-  pickup,
-  dropoff,
   className,
   drivers,
   searching,
-  onPickupChange,
-  onDropoffChange,
   pickupCoords,
   dropoffCoords,
+  onPickupChange,
   showGPSButton,
 }: MapViewProps) {
-  const pickupPos: [number, number] = pickupCoords ?? [
-    CAIRO[0] + 0.005,
-    CAIRO[1] - 0.005,
-  ];
-  const dropoffPos: [number, number] = dropoffCoords ?? [
-    CAIRO[0] - 0.005,
-    CAIRO[1] + 0.005,
-  ];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const pickupMarkerRef = useRef<L.Marker | null>(null);
+  const dropoffMarkerRef = useRef<L.Marker | null>(null);
+  const driverMarkersRef = useRef<L.Marker[]>([]);
+  const routeLineRef = useRef<L.Polyline | null>(null);
+  const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
-  const flyTarget: [number, number] | null = pickupCoords ?? null;
+  const onPickupChangeRef = useRef(onPickupChange);
+  useEffect(() => {
+    onPickupChangeRef.current = onPickupChange;
+  }, [onPickupChange]);
+
+  // Initialize Leaflet map
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = L.map(containerRef.current, {
+      center: [CAIRO_LAT, CAIRO_LNG],
+      zoom: 14,
+      zoomControl: false,
+      attributionControl: false,
+    });
+
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap © CARTO",
+        subdomains: "abcd",
+      },
+    ).addTo(map);
+
+    // Center pin for pickup selection (fixed center of screen like Uber)
+    if (onPickupChangeRef.current) {
+      map.on("moveend", () => {
+        if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
+        moveEndTimerRef.current = setTimeout(async () => {
+          const center = map.getCenter();
+          const label = await reverseGeocode(center.lat, center.lng);
+          onPickupChangeRef.current?.(center.lat, center.lng, label);
+        }, 600);
+      });
+    }
+
+    mapRef.current = map;
+
+    return () => {
+      if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // Update pickup marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (pickupCoords) {
+      if (!pickupMarkerRef.current) {
+        const greenIcon = L.divIcon({
+          html: '<div style="width:12px;height:12px;background:#4ade80;border-radius:50%;border:2px solid white;box-shadow:0 0 6px rgba(74,222,128,0.8)"></div>',
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+          className: "",
+        });
+        pickupMarkerRef.current = L.marker(pickupCoords, {
+          icon: greenIcon,
+        }).addTo(map);
+      } else {
+        pickupMarkerRef.current.setLatLng(pickupCoords);
+      }
+      map.setView(pickupCoords, 14, { animate: true });
+    }
+  }, [pickupCoords]);
+
+  // Update dropoff marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (dropoffCoords) {
+      if (!dropoffMarkerRef.current) {
+        const redIcon = L.divIcon({
+          html: '<div style="width:12px;height:12px;background:#f87171;border-radius:50%;border:2px solid white;box-shadow:0 0 6px rgba(248,113,113,0.8)"></div>',
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+          className: "",
+        });
+        dropoffMarkerRef.current = L.marker(dropoffCoords, {
+          icon: redIcon,
+        }).addTo(map);
+      } else {
+        dropoffMarkerRef.current.setLatLng(dropoffCoords);
+      }
+    }
+
+    // Draw route line
+    if (pickupCoords && dropoffCoords) {
+      if (routeLineRef.current) map.removeLayer(routeLineRef.current);
+      routeLineRef.current = L.polyline([pickupCoords, dropoffCoords], {
+        color: "#CCFF00",
+        weight: 3,
+        opacity: 0.8,
+        dashArray: "6, 8",
+      }).addTo(map);
+      map.fitBounds([pickupCoords, dropoffCoords], { padding: [40, 40] });
+    }
+  }, [dropoffCoords, pickupCoords]);
+
+  // Update driver markers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    for (const m of driverMarkersRef.current) map.removeLayer(m);
+    driverMarkersRef.current = [];
+
+    if (!drivers || drivers.length === 0) return;
+
+    const center = map.getCenter();
+    const bounds = map.getBounds();
+    const latSpan = (bounds.getNorth() - bounds.getSouth()) * 0.4;
+    const lngSpan = (bounds.getEast() - bounds.getWest()) * 0.4;
+
+    for (const driver of drivers) {
+      const lat = center.lat + (driver.y / 50 - 1) * latSpan;
+      const lng = center.lng + (driver.x / 50 - 1) * lngSpan;
+
+      const carIcon = L.divIcon({
+        html: `<div style="font-size:20px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))" title="${driver.name}">🚗</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        className: "",
+      });
+
+      const marker = L.marker([lat, lng], { icon: carIcon })
+        .bindPopup(`<b>${driver.name}</b><br/>${driver.eta} دقيقة`, {
+          closeButton: false,
+        })
+        .addTo(map);
+
+      driverMarkersRef.current.push(marker);
+    }
+  }, [drivers]);
+
+  const handleGPS = () => {
+    if (!navigator.geolocation) return;
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        mapRef.current?.setView([lat, lng], 16, { animate: true });
+        if (onPickupChange) {
+          const label = await reverseGeocode(lat, lng);
+          onPickupChange(lat, lng, label);
+        }
+        setIsLocating(false);
+      },
+      () => setIsLocating(false),
+      { timeout: 10000, enableHighAccuracy: true },
+    );
+  };
 
   return (
-    <div
-      className={`relative overflow-hidden ${className ?? "h-64"}`}
-      style={{ background: "#1a1a1a" }}
-    >
-      <style>{`
-        @keyframes pulseRing {
-          0% { transform: translate(-50%,-50%) scale(0.3); opacity: 0.8; }
-          100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
-        }
-        .leaflet-container { background: #141414; }
-      `}</style>
+    <div className={`relative ${className ?? ""}`}>
+      {/* Leaflet map container */}
+      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
-      <MapContainer
-        center={CAIRO}
-        zoom={13}
-        style={{ width: "100%", height: "100%" }}
-        zoomControl={false}
-        attributionControl={false}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution="© OpenStreetMap © CartoDB"
-          maxZoom={19}
-        />
+      {/* Center crosshair pin (Uber-style) */}
+      {onPickupChange && (
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ zIndex: 500 }}
+        >
+          <div className="flex flex-col items-center">
+            <div className="w-4 h-4 rounded-full bg-[#CCFF00] border-2 border-white shadow-lg" />
+            <div className="w-0.5 h-4 bg-[#CCFF00] opacity-80" />
+          </div>
+        </div>
+      )}
 
-        <FlyTo center={flyTarget} />
+      {/* GPS button */}
+      {showGPSButton && (
+        <button
+          type="button"
+          onClick={handleGPS}
+          className="absolute bottom-4 left-4 w-10 h-10 bg-card rounded-full flex items-center justify-center shadow-lg z-[1000] hover:bg-accent transition-colors"
+          data-ocid="map.button"
+          style={{ zIndex: 1000 }}
+        >
+          {isLocating ? (
+            <Crosshair className="w-5 h-5 text-primary animate-spin" />
+          ) : (
+            <Navigation className="w-5 h-5 text-primary" />
+          )}
+        </button>
+      )}
 
-        {showGPSButton && (
-          <GPSButton
-            onLocate={(pos) => {
-              const { latitude, longitude } = pos.coords;
-              onPickupChange?.(latitude, longitude, "موقعي الحالي");
-            }}
-          />
-        )}
-
-        {pickup?.trim() && (
-          <Marker
-            position={pickupPos}
-            icon={greenIcon}
-            draggable={!!onPickupChange}
-            eventHandlers={{
-              dragend: (e) => {
-                const latlng = (e.target as L.Marker).getLatLng();
-                onPickupChange?.(latlng.lat, latlng.lng, "موقعي");
-              },
-            }}
-          />
-        )}
-
-        {dropoff?.trim() && (
-          <Marker
-            position={dropoffPos}
-            icon={redIcon}
-            draggable={!!onDropoffChange}
-            eventHandlers={{
-              dragend: (e) => {
-                const latlng = (e.target as L.Marker).getLatLng();
-                onDropoffChange?.(latlng.lat, latlng.lng, "وجهتي");
-              },
-            }}
-          />
-        )}
-
-        {drivers?.map((driver) => {
-          const lat = CAIRO[0] + (driver.y / 100 - 0.5) * 0.06;
-          const lng = CAIRO[1] + (driver.x / 100 - 0.5) * 0.06;
-          return (
-            <Marker
-              key={driver.id}
-              position={[lat, lng]}
-              icon={makeDriverIcon(driver.eta)}
-            />
-          );
-        })}
-      </MapContainer>
-
-      <SearchingOverlay searching={searching} />
-
-      <div
-        style={{
-          position: "absolute",
-          bottom: "4px",
-          right: "8px",
-          fontSize: "9px",
-          color: "rgba(255,255,255,0.3)",
-          pointerEvents: "none",
-          zIndex: 500,
-        }}
-      >
-        © OpenStreetMap contributors
-      </div>
+      {/* Searching pulse overlay */}
+      {searching && (
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ zIndex: 600 }}
+        >
+          <div className="w-20 h-20 rounded-full border-2 border-[#CCFF00] opacity-40 animate-ping" />
+        </div>
+      )}
     </div>
   );
 }

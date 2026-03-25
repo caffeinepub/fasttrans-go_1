@@ -33,9 +33,16 @@ export function AppHeader({ showBack, title }: AppHeaderProps) {
           {title ? (
             <span className="font-bold text-foreground text-base">{title}</span>
           ) : (
-            <span className="font-display font-bold text-xl text-primary">
-              RideShare
-            </span>
+            <div className="flex items-center gap-2">
+              <img
+                src="/assets/uploads/file_00000000f3807243a28c9e0e373b8d9c-019d25f2-f105-7089-a82d-3b73f20d3bf8-2.png"
+                alt="FastTrans Logo"
+                className="h-7 w-auto"
+              />
+              <span className="font-display font-bold text-xl text-primary">
+                FastTrans
+              </span>
+            </div>
           )}
 
           {/* Left side: back or spacer */}

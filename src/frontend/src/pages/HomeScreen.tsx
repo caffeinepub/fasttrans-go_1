@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Car, Package, Plane, Search, Truck } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { MapView } from "../components/MapView";
@@ -22,6 +22,19 @@ const recentDestinations = [
 export default function HomeScreen() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [userCoords, setUserCoords] = useState<[number, number] | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        setUserCoords([pos.coords.latitude, pos.coords.longitude]);
+      },
+      () => {},
+      { timeout: 8000, enableHighAccuracy: true },
+    );
+  }, []);
 
   const handleSearch = () => {
     navigate({ to: "/book" });
@@ -39,7 +52,11 @@ export default function HomeScreen() {
 
       {/* Map — top 55% */}
       <div className="relative flex-none" style={{ height: "55vh" }}>
-        <MapView className="w-full h-full" />
+        <MapView
+          className="w-full h-full"
+          pickupCoords={userCoords}
+          showGPSButton={true}
+        />
       </div>
 
       {/* Bottom sheet */}
