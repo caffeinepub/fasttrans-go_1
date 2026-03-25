@@ -1,0 +1,119 @@
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/assets/fonts/PlusJakartaSans.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/assets/fonts/BricolageGrotesque.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 1rem;
+
+    /* Dark InDriver theme */
+    --background: 0.12 0 0;
+    --foreground: 1 0 0;
+    --card: 0.16 0 0;
+    --card-foreground: 1 0 0;
+    --popover: 0.16 0 0;
+    --popover-foreground: 1 0 0;
+
+    /* Lime-yellow primary: #CCFF00 */
+    --primary: 0.93 0.23 120;
+    --primary-foreground: 0.1 0 0;
+
+    --secondary: 0.2 0 0;
+    --secondary-foreground: 1 0 0;
+    --muted: 0.2 0 0;
+    --muted-foreground: 0.6 0.005 0;
+
+    --accent: 0.22 0 0;
+    --accent-foreground: 1 0 0;
+
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 1 0 0;
+
+    --border: 0.24 0 0;
+    --input: 0.22 0 0;
+    --ring: 0.93 0.23 120;
+
+    /* Brand alias = primary */
+    --brand: 0.93 0.23 120;
+    --brand-hover: 0.88 0.22 120;
+    --brand-light: 0.18 0.04 120;
+
+    --chart-1: 0.93 0.23 120;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+
+    --sidebar: 0.16 0 0;
+    --sidebar-foreground: 1 0 0;
+    --sidebar-primary: 0.93 0.23 120;
+    --sidebar-primary-foreground: 0.1 0 0;
+    --sidebar-accent: 0.22 0 0;
+    --sidebar-accent-foreground: 1 0 0;
+    --sidebar-border: 0.24 0 0;
+    --sidebar-ring: 0.93 0.23 120;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Cairo", "Tajawal", "Plus Jakarta Sans", system-ui, sans-serif;
+    direction: rtl;
+  }
+}
+
+/* RTL support */
+[dir="rtl"] {
+  text-align: right;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Status badge colors — dark theme adapted */
+.status-pending {
+  background-color: oklch(0.28 0.07 85);
+  color: oklch(0.85 0.12 85);
+}
+.status-accepted {
+  background-color: oklch(0.22 0.07 258);
+  color: oklch(0.75 0.15 258);
+}
+.status-inProgress {
+  background-color: oklch(0.22 0.08 145);
+  color: oklch(0.75 0.12 145);
+}
+.status-completed {
+  background-color: oklch(0.22 0.05 145);
+  color: oklch(0.75 0.1 145);
+}
+.status-cancelled {
+  background-color: oklch(0.22 0.09 25);
+  color: oklch(0.72 0.18 25);
+}
+
+/* Bottom safe area */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
