@@ -1,16 +1,8 @@
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Crosshair, Navigation } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-// Fix default Leaflet marker icon
-(L.Icon.Default.prototype as any)._getIconUrl = undefined;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+// Leaflet is loaded from CDN via index.html <script> + <link> tags
+// L is available as window.L globally
 
 export interface Driver {
   id: number;
@@ -54,6 +46,11 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getL(): any {
+  return (window as any).L;
+}
+
 export function MapView({
   className,
   drivers,
@@ -64,11 +61,16 @@ export function MapView({
   showGPSButton,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const pickupMarkerRef = useRef<L.Marker | null>(null);
-  const dropoffMarkerRef = useRef<L.Marker | null>(null);
-  const driverMarkersRef = useRef<L.Marker[]>([]);
-  const routeLineRef = useRef<L.Polyline | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pickupMarkerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dropoffMarkerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const driverMarkersRef = useRef<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const routeLineRef = useRef<any>(null);
   const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
@@ -77,9 +79,21 @@ export function MapView({
     onPickupChangeRef.current = onPickupChange;
   }, [onPickupChange]);
 
-  // Initialize Leaflet map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    const L = getL();
+    if (!L) return;
+
+    if (L.Icon?.Default?.prototype) {
+      L.Icon.Default.prototype._getIconUrl = undefined;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl:
+          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl:
+          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+    }
 
     const map = L.map(containerRef.current, {
       center: [CAIRO_LAT, CAIRO_LNG],
@@ -92,12 +106,11 @@ export function MapView({
       "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
       {
         maxZoom: 19,
-        attribution: "© OpenStreetMap © CARTO",
+        attribution: "\u00a9 OpenStreetMap \u00a9 CARTO",
         subdomains: "abcd",
       },
     ).addTo(map);
 
-    // Center pin for pickup selection (fixed center of screen like Uber)
     if (onPickupChangeRef.current) {
       map.on("moveend", () => {
         if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
@@ -118,10 +131,10 @@ export function MapView({
     };
   }, []);
 
-  // Update pickup marker
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const L = getL();
+    if (!map || !L) return;
     if (pickupCoords) {
       if (!pickupMarkerRef.current) {
         const greenIcon = L.divIcon({
@@ -140,10 +153,10 @@ export function MapView({
     }
   }, [pickupCoords]);
 
-  // Update dropoff marker
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const L = getL();
+    if (!map || !L) return;
     if (dropoffCoords) {
       if (!dropoffMarkerRef.current) {
         const redIcon = L.divIcon({
@@ -159,8 +172,6 @@ export function MapView({
         dropoffMarkerRef.current.setLatLng(dropoffCoords);
       }
     }
-
-    // Draw route line
     if (pickupCoords && dropoffCoords) {
       if (routeLineRef.current) map.removeLayer(routeLineRef.current);
       routeLineRef.current = L.polyline([pickupCoords, dropoffCoords], {
@@ -173,10 +184,10 @@ export function MapView({
     }
   }, [dropoffCoords, pickupCoords]);
 
-  // Update driver markers
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const L = getL();
+    if (!map || !L) return;
 
     for (const m of driverMarkersRef.current) map.removeLayer(m);
     driverMarkersRef.current = [];
@@ -200,9 +211,10 @@ export function MapView({
       });
 
       const marker = L.marker([lat, lng], { icon: carIcon })
-        .bindPopup(`<b>${driver.name}</b><br/>${driver.eta} دقيقة`, {
-          closeButton: false,
-        })
+        .bindPopup(
+          `<b>${driver.name}</b><br/>${driver.eta} \u062f\u0642\u064a\u0642\u0629`,
+          { closeButton: false },
+        )
         .addTo(map);
 
       driverMarkersRef.current.push(marker);
@@ -229,10 +241,8 @@ export function MapView({
 
   return (
     <div className={`relative ${className ?? ""}`}>
-      {/* Leaflet map container */}
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Center crosshair pin (Uber-style) */}
       {onPickupChange && (
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
@@ -245,12 +255,11 @@ export function MapView({
         </div>
       )}
 
-      {/* GPS button */}
       {showGPSButton && (
         <button
           type="button"
           onClick={handleGPS}
-          className="absolute bottom-4 left-4 w-10 h-10 bg-card rounded-full flex items-center justify-center shadow-lg z-[1000] hover:bg-accent transition-colors"
+          className="absolute bottom-4 left-4 w-10 h-10 bg-card rounded-full flex items-center justify-center shadow-lg hover:bg-accent transition-colors"
           data-ocid="map.button"
           style={{ zIndex: 1000 }}
         >
@@ -262,7 +271,6 @@ export function MapView({
         </button>
       )}
 
-      {/* Searching pulse overlay */}
       {searching && (
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"

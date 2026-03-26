@@ -117,3 +117,13 @@ html {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Fix Leaflet map z-index so it doesn't overlap the side drawer */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 10 !important;
+}
+.leaflet-control {
+  z-index: 11 !important;
+}
