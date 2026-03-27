@@ -21,6 +21,8 @@ import ProfilePage from "./pages/ProfilePage";
 import SafetyPage from "./pages/SafetyPage";
 import SettingsPage from "./pages/SettingsPage";
 import TripHistoryPage from "./pages/TripHistoryPage";
+import TripInProgressPage from "./pages/TripInProgressPage";
+import TripRatingPage from "./pages/TripRatingPage";
 
 function RootLayout() {
   const { identity } = useInternetIdentity();
@@ -112,6 +114,18 @@ const driverRegisterRoute = createRoute({
   component: DriverRegistrationPage,
 });
 
+const tripInProgressRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/trip-in-progress",
+  component: TripInProgressPage,
+});
+
+const tripRatingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/trip-rating",
+  component: TripRatingPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
@@ -125,6 +139,8 @@ const routeTree = rootRoute.addChildren([
   safetyRoute,
   driverEnRouteRoute,
   driverRegisterRoute,
+  tripInProgressRoute,
+  tripRatingRoute,
 ]);
 
 const router = createRouter({ routeTree });

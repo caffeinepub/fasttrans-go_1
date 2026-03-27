@@ -87,12 +87,7 @@ export default function DriverEnRoutePage() {
   };
 
   const handleStartTrip = () => {
-    sessionStorage.removeItem("rideshare_driver_name");
-    sessionStorage.removeItem("rideshare_driver_car");
-    sessionStorage.removeItem("rideshare_driver_rating");
-    sessionStorage.removeItem("rideshare_driver_eta");
-    sessionStorage.removeItem("rideshare_trip_price");
-    navigate({ to: "/passenger" });
+    navigate({ to: "/trip-in-progress" });
   };
 
   const simulatedDriver = [

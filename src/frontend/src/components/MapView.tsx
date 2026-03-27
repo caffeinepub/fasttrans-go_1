@@ -72,6 +72,7 @@ export function MapView({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const routeLineRef = useRef<any>(null);
   const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDraggingRef = useRef(false);
   const [isLocating, setIsLocating] = useState(false);
 
   const onPickupChangeRef = useRef(onPickupChange);
@@ -102,17 +103,36 @@ export function MapView({
       attributionControl: false,
     });
 
+    // Satellite imagery base layer
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       {
         maxZoom: 19,
-        attribution: "\u00a9 OpenStreetMap \u00a9 CARTO",
+        attribution: "Tiles &copy; Esri",
+      },
+    ).addTo(map);
+
+    // Labels overlay on top (shows street names)
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 19,
         subdomains: "abcd",
+        opacity: 0.8,
       },
     ).addTo(map);
 
     if (onPickupChangeRef.current) {
+      // Track user drag intent
+      map.on("dragstart", () => {
+        isDraggingRef.current = true;
+      });
+
       map.on("moveend", () => {
+        // Only reverse geocode when the user manually dragged the map
+        if (!isDraggingRef.current) return;
+        isDraggingRef.current = false;
+
         if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
         moveEndTimerRef.current = setTimeout(async () => {
           const center = map.getCenter();
@@ -123,6 +143,22 @@ export function MapView({
     }
 
     mapRef.current = map;
+
+    // Auto-locate user on mount
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          map.setView([lat, lng], 16, { animate: false });
+          if (onPickupChangeRef.current) {
+            const label = await reverseGeocode(lat, lng);
+            onPickupChangeRef.current(lat, lng, label);
+          }
+        },
+        () => {}, // silently fail
+        { timeout: 8000, enableHighAccuracy: true },
+      );
+    }
 
     return () => {
       if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
@@ -249,8 +285,17 @@ export function MapView({
           style={{ zIndex: 500 }}
         >
           <div className="flex flex-col items-center">
-            <div className="w-4 h-4 rounded-full bg-[#CCFF00] border-2 border-white shadow-lg" />
-            <div className="w-0.5 h-4 bg-[#CCFF00] opacity-80" />
+            <div
+              style={{
+                width: "16px",
+                height: "16px",
+                background: "#4285F4",
+                borderRadius: "50%",
+                border: "3px solid white",
+                boxShadow: "0 0 0 3px rgba(66,133,244,0.3)",
+              }}
+            />
+            <div className="w-0.5 h-4 bg-white opacity-80" />
           </div>
         </div>
       )}

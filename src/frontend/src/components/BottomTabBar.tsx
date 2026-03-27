@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Car, ClipboardList } from "lucide-react";
+import { Car, ClipboardList, User } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useGetCallerUserProfile } from "../hooks/useQueries";
 
@@ -8,6 +9,12 @@ export function BottomTabBar() {
   const { data: profile } = useGetCallerUserProfile();
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("fasttrans_profile_photo");
+    if (saved) setPhotoUrl(saved);
+  }, []);
 
   if (!identity) return null;
 
@@ -19,6 +26,7 @@ export function BottomTabBar() {
       dir="rtl"
       data-ocid="bottombar.panel"
     >
+      {/* رحلة */}
       <Link
         to={profile?.isDriver ? "/driver" : "/passenger"}
         className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
@@ -32,20 +40,41 @@ export function BottomTabBar() {
         <span className="text-xs font-medium">رحلة</span>
       </Link>
 
-      {profile?.isDriver && (
-        <Link
-          to="/history"
-          className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
-            isActive("/history")
-              ? "text-primary"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          data-ocid="bottombar.tab"
-        >
-          <ClipboardList className="w-6 h-6" />
-          <span className="text-xs font-medium">طلباتي</span>
-        </Link>
-      )}
+      {/* السجل */}
+      <Link
+        to="/history"
+        className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
+          isActive("/history")
+            ? "text-primary"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        data-ocid="bottombar.tab"
+      >
+        <ClipboardList className="w-6 h-6" />
+        <span className="text-xs font-medium">السجل</span>
+      </Link>
+
+      {/* الملف */}
+      <Link
+        to="/profile"
+        className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors ${
+          isActive("/profile")
+            ? "text-primary"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        data-ocid="bottombar.tab"
+      >
+        {photoUrl ? (
+          <img
+            src={photoUrl}
+            alt="الملف"
+            className="w-6 h-6 rounded-full object-cover ring-1 ring-border"
+          />
+        ) : (
+          <User className="w-6 h-6" />
+        )}
+        <span className="text-xs font-medium">الملف</span>
+      </Link>
     </nav>
   );
 }

@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,8 +9,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "@tanstack/react-router";
-import { Car, Loader2, Phone, Star, User, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Camera, Car, Loader2, Phone, Star, User, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppHeader } from "../components/AppHeader";
 import { Footer } from "../components/Footer";
@@ -32,6 +32,8 @@ export default function ProfilePage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!identity) navigate({ to: "/auth" });
@@ -43,6 +45,25 @@ export default function ProfilePage() {
       setPhone(profile.phoneNumber);
     }
   }, [profile]);
+
+  // Load saved photo on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("fasttrans_profile_photo");
+    if (saved) setPhotoUrl(saved);
+  }, []);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      localStorage.setItem("fasttrans_profile_photo", base64);
+      setPhotoUrl(base64);
+      toast.success("تم حفظ الصورة الشخصية");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSaveName = async () => {
     if (!name.trim()) return;
@@ -92,11 +113,39 @@ export default function ProfilePage() {
 
         {/* Avatar + role */}
         <div className="flex items-center gap-5 mb-8 bg-white border border-border rounded-2xl p-6 shadow-card">
-          <Avatar className="w-16 h-16">
-            <AvatarFallback className="bg-brand text-white text-xl font-bold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          {/* Clickable avatar with camera overlay */}
+          <button
+            type="button"
+            className="relative shrink-0 cursor-pointer rounded-full"
+            onClick={() => photoInputRef.current?.click()}
+            aria-label="تغيير الصورة الشخصية"
+          >
+            <Avatar className="w-16 h-16">
+              {photoUrl ? (
+                <AvatarImage
+                  src={photoUrl}
+                  alt="صورة الملف الشخصي"
+                  className="object-cover"
+                />
+              ) : null}
+              <AvatarFallback className="bg-brand text-white text-xl font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            {/* Camera overlay */}
+            <div className="absolute inset-0 rounded-full flex items-end justify-end pointer-events-none">
+              <div className="w-5 h-5 bg-[#CCFF00] rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                <Camera className="w-2.5 h-2.5 text-black" />
+              </div>
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+          </button>
           <div className="flex-1">
             <h2 className="font-display font-bold text-xl">
               {profile?.name ?? "..."}
@@ -123,6 +172,9 @@ export default function ProfilePage() {
                 </span>
               )}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              اضغط على الصورة لتغييرها
+            </p>
           </div>
         </div>
 

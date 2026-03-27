@@ -9,7 +9,7 @@ import {
   MapPin,
   Settings,
   Shield,
-  Truck,
+  User,
   X,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -62,10 +62,16 @@ export function SideDrawer({ open, onClose }: SideDrawerProps) {
         .toUpperCase()
     : "م";
 
+  // Read saved profile photo from localStorage
+  const savedPhoto =
+    typeof window !== "undefined"
+      ? localStorage.getItem("fasttrans_profile_photo")
+      : null;
+
   const menuItems = [
-    { icon: MapPin, label: "المدينة", to: "/passenger" },
+    { icon: User, label: "الملف الشخصي", to: "/profile" },
+    { icon: MapPin, label: "طلب رحلة", to: "/book" },
     { icon: History, label: "سجل الطلبات", to: "/history" },
-    { icon: Truck, label: "مناديب التوصيل", to: "/book" },
     { icon: Bell, label: "الإشعارات", to: "/notifications" },
     { icon: Shield, label: "السلامة", to: "/safety" },
     { icon: Settings, label: "الإعدادات", to: "/settings" },
@@ -101,10 +107,18 @@ export function SideDrawer({ open, onClose }: SideDrawerProps) {
         <div className="px-6 pt-14 pb-6 border-b border-border">
           {identity ? (
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center shrink-0">
-                <span className="text-xl font-bold text-primary-foreground">
-                  {initials}
-                </span>
+              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center shrink-0 overflow-hidden">
+                {savedPhoto ? (
+                  <img
+                    src={savedPhoto}
+                    alt="صورة الملف"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xl font-bold text-primary-foreground">
+                    {initials}
+                  </span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-foreground text-lg truncate">
@@ -220,7 +234,7 @@ export function SideDrawer({ open, onClose }: SideDrawerProps) {
             <SiFacebook className="w-4 h-4 text-muted-foreground" />
           </a>
           <span className="text-xs text-muted-foreground mr-auto">
-            © {new Date().getFullYear()} RideShare
+            © {new Date().getFullYear()} FastTrans
           </span>
         </div>
       </div>

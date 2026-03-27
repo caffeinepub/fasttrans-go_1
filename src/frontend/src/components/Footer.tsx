@@ -87,15 +87,7 @@ export function Footer() {
             <span className="font-display font-bold text-white">RIDELINK</span>
           </div>
           <p className="text-xs text-white/50">
-            © {year}. Built with ❤️ using{" "}
-            <a
-              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-white transition-colors"
-            >
-              caffeine.ai
-            </a>
+            © {year} FastTrans. جميع الحقوق محفوظة.
           </p>
         </div>
       </div>
